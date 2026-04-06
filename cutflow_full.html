@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CutFlow — РУСАЛ · Раскрой Фольги v0.2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<!-- PapaParse for CSV -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<!-- SheetJS for Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+/* ═══════════════════════ TOKENS ═══════════════════════ */
+:root {
+  --bg:       #0c0d0e;
+  --surf:     #131416;
+  --surf2:    #191b1d;
+  --surf3:    #1f2123;
+  --surf4:    #252729;
+  --border:   rgba(255,255,255,0.065);
+  --borderB:  rgba(255,255,255,0.12);
+  --accent:   #c8f03c;
+  --accentDim:rgba(200,240,60,0.18);
+  --cyan:     #3de0f5;
+  --cyanDim:  rgba(61,224,245,0.15);
+  --red:      #f0504a;
+  --amber:    #f5b833;
+  --text:     #e6e4de;
+  --textD:    #9a9890;
+  --textM:    #5e5e5c;
+  --r:        6px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;overflow:hidden;}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:'IBM Plex Sans',sans-serif; font-size:13px;
+}
+
+/* grid bg */
+body::before{
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    linear-gradient(rgba(255,255,255,0.013) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.013) 1px, transparent 1px);
+  background-size:44px 44px;
+}
+
+/* ═══════════════════════ SCROLLBARS ═══════════════════════ */
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--surf4);border-radius:2px;}
+
+/* ═══════════════════════ HEADER ═══════════════════════ */
+#header{
+  position:relative; z-index:200;
+  height:52px; padding:0 24px;
+  display:flex; align-items:center; justify-content:space-between;
+  background:rgba(12,13,14,0.95); backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-mark{
+  width:26px;height:26px;flex-shrink:0;
+  background:var(--accent);
+  clip-path:polygon(0 100%,0 28%,50% 0,100% 28%,100% 100%);
+}
+.logo-name{
+  font-family:'Syne',sans-serif;font-weight:800;font-size:17px;
+  color:#fff;letter-spacing:-.02em;
+}
+.logo-pipe{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--textM);letter-spacing:.1em;text-transform:uppercase;
+  border-left:1px solid var(--border); padding-left:10px;
+}
+.hdr-center{display:flex;align-items:center;gap:6px;}
+.hdr-tab{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  text-transform:uppercase;letter-spacing:.1em;
+  color:var(--textM);background:none;border:none;cursor:pointer;
+  padding:5px 10px;border-radius:3px;transition:color .15s,background .15s;
+}
+.hdr-tab:hover{color:var(--text);background:var(--surf2);}
+.hdr-tab.active{color:var(--accent);background:rgba(200,240,60,.08);}
+.hdr-right{display:flex;align-items:center;gap:12px;}
+.dot-status{
+  width:6px;height:6px;border-radius:50%;
+  background:var(--accent);box-shadow:0 0 8px var(--accent);
+  animation:blink 2.5s infinite;
+}
+@keyframes blink{0%,100%{opacity:1}60%{opacity:.25}}
+.mill-id{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--textM);letter-spacing:.05em;
+}
+.btn{
+  font-family:'IBM Plex Sans',sans-serif;font-weight:500;font-size:11px;
+  border:1px solid var(--borderB);color:var(--textD);
+  background:none;padding:5px 12px;border-radius:var(--r);
+  cursor:pointer;transition:border-color .15s,color .15s,background .15s;
+}
+.btn:hover{border-color:rgba(255,255,255,.25);color:var(--text);background:var(--surf2);}
+.btn-accent{
+  background:var(--accent);color:#0c0d0e;
+  font-family:'Syne',sans-serif;font-weight:700;font-size:11px;
+  border:none;padding:6px 18px;border-radius:var(--r);
+  cursor:pointer;letter-spacing:.04em;text-transform:uppercase;
+  transition:transform .12s,box-shadow .12s;
+}
+.btn-accent:hover{transform:translateY(-1px);box-shadow:0 4px 18px rgba(200,240,60,.35);}
+.btn-accent:active{transform:translateY(0);}
+.btn-accent:disabled{opacity:.4;cursor:default;transform:none;box-shadow:none;}
+
+/* progress bar */
+#prog{
+  position:fixed;top:52px;left:0;right:0;height:2px;
+  background:var(--surf2);z-index:300;
+}
+#progFill{
+  height:100%;background:var(--accent);width:0%;
+  box-shadow:0 0 8px var(--accent);
+  transition:width .25s ease;
+}
+
+/* ═══════════════════════ APP GRID ═══════════════════════ */
+#app{
+  position:relative;z-index:1;
+  display:grid;
+  grid-template-columns:272px 1fr 256px;
+  height:calc(100vh - 54px);
+}
+
+/* ═══════════════════════ PANELS ═══════════════════════ */
+.panel{
+  display:flex;flex-direction:column;
+  border-right:1px solid var(--border);
+  background:var(--surf);overflow:hidden;
+}
+.panel:last-child{border-right:none;border-left:1px solid var(--border);}
+.ph{
+  padding:13px 18px 11px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.ph-title{
+  font-family:'Syne',sans-serif;font-weight:700;font-size:10px;
+  text-transform:uppercase;letter-spacing:.13em;color:var(--textM);
+}
+.ph-title em{color:var(--accent);font-style:normal;margin-right:5px;}
+.panel-body{flex:1;overflow-y:auto;overflow-x:hidden;}
+
+/* ═══════════════════════ LEFT – ORDERS ═══════════════════════ */
+.upload-drop{
+  margin:12px; padding:14px 12px; text-align:center;
+  border:1px dashed rgba(200,240,60,.2);border-radius:var(--r);
+  cursor:pointer;transition:border-color .2s,background .2s;
+  position:relative;
+}
+.upload-drop:hover,
+.upload-drop.dragover{border-color:rgba(200,240,60,.5);background:rgba(200,240,60,.03);}
+.upload-drop input[type=file]{
+  position:absolute;inset:0;opacity:0;cursor:pointer;
+}
+.ud-icon{
+  width:26px;height:26px;margin:0 auto 7px;
+  background:rgba(200,240,60,.1);border-radius:4px;
+  display:flex;align-items:center;justify-content:center;font-size:13px;
+}
+.ud-label{font-size:11px;color:var(--textD);line-height:1.55;}
+.ud-label strong{color:var(--accent);font-weight:500;}
+
+.sec-head{
+  padding:8px 18px 5px;
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  text-transform:uppercase;letter-spacing:.12em;color:var(--textM);
+  border-bottom:1px solid var(--border);flex-shrink:0;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.sec-count{
+  background:var(--surf3);padding:1px 6px;border-radius:2px;
+  font-size:8px;color:var(--textD);
+}
+
+.orders-wrap{padding:8px;display:flex;flex-direction:column;gap:5px;}
+.ocard{
+  background:var(--surf2);border:1px solid var(--border);
+  border-radius:var(--r);padding:9px 11px 9px 14px;
+  cursor:pointer;transition:border-color .15s,background .15s;
+  position:relative;overflow:hidden;
+  animation:slideIn .25s ease both;
+}
+@keyframes slideIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.ocard::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;}
+.ocard.p1::before{background:var(--accent);}
+.ocard.p2::before{background:var(--cyan);}
+.ocard:hover{border-color:var(--borderB);background:var(--surf3);}
+.ocard.sel{border-color:var(--accent);background:rgba(200,240,60,.04);}
+.ocard-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+.ocard-id{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:11px;color:#fff;}
+.badge{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  padding:2px 5px;border-radius:2px;text-transform:uppercase;letter-spacing:.07em;
+}
+.b1{background:rgba(200,240,60,.14);color:var(--accent);}
+.b2{background:rgba(61,224,245,.1);color:var(--cyan);border:1px solid rgba(61,224,245,.18);}
+.ocard-dims{
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  color:var(--textD);margin-bottom:4px;
+}
+.ocard-tags{display:flex;gap:6px;flex-wrap:wrap;}
+.tag{
+  font-size:9px;color:var(--textM);
+  background:rgba(255,255,255,.04);padding:1px 5px;border-radius:2px;
+}
+.ocard-del{
+  position:absolute;top:7px;right:7px;
+  width:16px;height:16px;border-radius:2px;
+  background:none;border:none;color:var(--textM);
+  cursor:pointer;font-size:10px;display:none;
+  align-items:center;justify-content:center;
+  transition:color .15s,background .15s;
+}
+.ocard:hover .ocard-del{display:flex;}
+.ocard-del:hover{color:var(--red);background:rgba(240,80,74,.1);}
+
+.add-btn{
+  margin:8px;padding:9px;
+  background:none;border:1px dashed rgba(255,255,255,.08);
+  border-radius:var(--r);color:var(--textM);font-size:11px;
+  cursor:pointer;width:calc(100% - 16px);text-align:center;
+  transition:border-color .15s,color .15s;
+}
+.add-btn:hover{border-color:var(--borderB);color:var(--text);}
+
+/* ═══════════════════════ CENTER ═══════════════════════ */
+.center-panel{
+  display:flex;flex-direction:column;background:var(--bg);overflow:hidden;
+}
+.ctoolbar{
+  padding:9px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+  gap:12px;
+}
+.legend{
+  display:flex;gap:16px;align-items:center;
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--textM);
+}
+.leg-item{display:flex;gap:4px;align-items:center;}
+.leg-sw{width:10px;height:10px;border-radius:1px;flex-shrink:0;}
+.zoom-row{display:flex;gap:4px;align-items:center;}
+.zbtn{
+  background:var(--surf2);border:1px solid var(--border);
+  color:var(--textD);width:22px;height:22px;border-radius:3px;
+  font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:background .12s;font-family:'JetBrains Mono',monospace;
+}
+.zbtn:hover{background:var(--surf3);}
+.zlabel{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  color:var(--textM);min-width:34px;text-align:center;
+}
+.fit-btn{
+  font-family:'JetBrains Mono',monospace;font-size:9px;
+  background:none;border:1px solid var(--border);
+  color:var(--textM);padding:3px 8px;border-radius:3px;cursor:pointer;
+  transition:color .12s,border-color .12s;
+}
+.fit-btn:hover{color:var(--text);border-color:var(--borderB);}
+
+.cwrap{
+  flex:1;overflow:auto;padding:16px;
+  display:flex;align-items:flex-start;justify-content:flex-start;
+  scrollbar-width:thin;scrollbar-color:var(--surf4) transparent;
+  cursor:crosshair;
+}
+#canvas{display:block;border-radius:3px;}
+
+/* coords bar */
+.coord-bar{
+  height:22px;padding:0 18px;border-top:1px solid var(--border);flex-shrink:0;
+  display:flex;align-items:center;gap:20px;
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--textM);
+}
+.cb-item{display:flex;gap:5px;}
+.cb-val{color:var(--textD);}
+
+/* ═══════════════════════ RIGHT – METRICS ═══════════════════════ */
+.msec{padding:12px 15px;border-bottom:1px solid var(--border);}
+.m-big-label{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  text-transform:uppercase;letter-spacing:.1em;color:var(--textM);
+  margin-bottom:3px;
+}
+.m-big-val{
+  font-family:'Syne',sans-serif;font-weight:800;font-size:30px;
+  line-height:1;letter-spacing:-.03em;
+}
+.good{color:var(--accent);}
+.warn{color:var(--amber);}
+.bad{color:var(--red);}
+.mrow{
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03);
+}
+.mrow:last-child{border-bottom:none;}
+.ml{font-size:10px;color:var(--textM);}
+.mv{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--textD);}
+
+/* mini bars */
+.mbar-row{margin-bottom:9px;}
+.mbar-top{
+  display:flex;justify-content:space-between;margin-bottom:3px;
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--textM);
+}
+.mbar-track{height:4px;background:var(--surf3);border-radius:2px;overflow:hidden;}
+.mbar-fill{height:100%;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1);}
+
+/* breakdown */
+.ob-item{
+  display:flex;align-items:center;gap:7px;padding:4px 0;
+  border-bottom:1px solid rgba(255,255,255,.03);
+}
+.ob-item:last-child{border-bottom:none;}
+.ob-dot{width:7px;height:7px;border-radius:1px;flex-shrink:0;}
+.ob-id{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--textD);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ob-dim{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--textM);}
+
+/* json */
+.jbox{margin:12px 15px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+.jhead{
+  padding:7px 11px;border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center;
+}
+.jtitle{font-family:'JetBrains Mono',monospace;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--textM);}
+.jbtns{display:flex;gap:6px;}
+.jbtn{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  background:none;border:none;color:var(--accent);cursor:pointer;
+  letter-spacing:.05em;transition:opacity .15s;
+}
+.jbtn:hover{opacity:.7;}
+.jbody{
+  padding:9px 11px;max-height:130px;overflow-y:auto;
+  font-family:'JetBrains Mono',monospace;font-size:8.5px;
+  color:var(--textD);line-height:1.8;white-space:pre;
+  scrollbar-width:thin;scrollbar-color:var(--surf4) transparent;
+}
+.jk{color:#c8f03c;}
+.js{color:#3de0f5;}
+.jn{color:#f5b833;}
+
+/* ═══════════════════════ TOOLTIP ═══════════════════════ */
+#tt{
+  position:fixed;z-index:500;pointer-events:none;
+  background:var(--surf4);border:1px solid var(--borderB);
+  border-radius:var(--r);padding:8px 12px;
+  box-shadow:0 8px 28px rgba(0,0,0,.55);
+  transition:opacity .1s;min-width:160px;
+  font-size:11px;
+}
+#tt.hide{opacity:0;}
+.tt-id{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;color:#fff;margin-bottom:5px;}
+.tt-row{display:flex;justify-content:space-between;gap:14px;padding:1px 0;}
+.tt-k{color:var(--textM);}
+.tt-v{font-family:'JetBrains Mono',monospace;color:var(--textD);}
+
+/* ═══════════════════════ MODAL ═══════════════════════ */
+#overlay{
+  position:fixed;inset:0;z-index:400;
+  background:rgba(0,0,0,.7);backdrop-filter:blur(4px);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+}
+#overlay.open{opacity:1;pointer-events:all;}
+.modal{
+  background:var(--surf);border:1px solid var(--borderB);
+  border-radius:10px;padding:24px;width:440px;max-width:90vw;
+  box-shadow:0 24px 60px rgba(0,0,0,.6);
+  transform:translateY(10px);transition:transform .2s;
+}
+#overlay.open .modal{transform:translateY(0);}
+.modal-title{
+  font-family:'Syne',sans-serif;font-weight:700;font-size:15px;
+  color:#fff;margin-bottom:18px;
+}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.fgroup{display:flex;flex-direction:column;gap:4px;}
+.fgroup.full{grid-column:1/-1;}
+.flabel{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  text-transform:uppercase;letter-spacing:.1em;color:var(--textM);
+}
+.finput{
+  background:var(--surf2);border:1px solid var(--border);
+  border-radius:4px;padding:7px 9px;color:var(--text);
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  transition:border-color .15s;outline:none;
+}
+.finput:focus{border-color:rgba(200,240,60,.5);}
+.fselect{
+  background:var(--surf2);border:1px solid var(--border);
+  border-radius:4px;padding:7px 9px;color:var(--text);
+  font-family:'JetBrains Mono',monospace;font-size:11px;
+  outline:none;cursor:pointer;
+}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;}
+.btn-cancel{
+  background:none;border:1px solid var(--border);
+  color:var(--textD);padding:7px 16px;border-radius:var(--r);
+  cursor:pointer;font-size:11px;
+}
+.btn-cancel:hover{border-color:var(--borderB);color:var(--text);}
+.btn-save{
+  background:var(--accent);color:#0c0d0e;
+  font-family:'Syne',sans-serif;font-weight:700;font-size:11px;
+  border:none;padding:7px 20px;border-radius:var(--r);
+  cursor:pointer;letter-spacing:.04em;
+}
+.btn-save:hover{opacity:.9;}
+
+/* ═══════════════════════ TOAST ═══════════════════════ */
+#toast{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  background:var(--surf4);border:1px solid var(--borderB);
+  border-radius:var(--r);padding:8px 18px;
+  font-size:11px;color:var(--text);
+  box-shadow:0 8px 24px rgba(0,0,0,.5);
+  z-index:600;transition:opacity .3s,transform .3s;
+  opacity:0;pointer-events:none;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ═══════════════════════ EMPTY STATE ═══════════════════════ */
+.empty-canvas{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:12px;
+}
+.empty-icon{
+  width:48px;height:48px;
+  background:var(--surf2);border:1px solid var(--border);
+  border-radius:var(--r);display:flex;align-items:center;
+  justify-content:center;font-size:20px;
+}
+.empty-text{font-size:12px;color:var(--textM);text-align:center;line-height:1.6;}
+
+/* ═══════════════════════ EMPTY ORDERS ═══════════════════════ */
+.no-orders{
+  padding:24px 18px;text-align:center;
+  font-size:11px;color:var(--textM);line-height:1.7;
+}
+
+/* ═══════════════════════ ALLOYS SELECT ═══════════════════════ */
+.ref-table{width:100%;border-collapse:collapse;}
+.ref-table th{
+  font-family:'JetBrains Mono',monospace;font-size:8px;
+  text-transform:uppercase;letter-spacing:.1em;color:var(--textM);
+  padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;
+}
+.ref-table td{
+  font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--textD);
+  padding:4px 8px;border-bottom:1px solid rgba(255,255,255,.025);
+}
+
+/* highlight running btn */
+@keyframes pulse-btn{
+  0%,100%{box-shadow:0 4px 18px rgba(200,240,60,.35);}
+  50%{box-shadow:0 4px 28px rgba(200,240,60,.7);}
+}
+.running{animation:pulse-btn .7s infinite;}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div id="header">
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <span class="logo-name">CutFlow</span>
+    <span class="logo-pipe">РУСАЛ · v0.2</span>
+  </div>
+  <div class="hdr-center">
+    <button class="hdr-tab active" onclick="switchTab('layout',this)">Раскрой</button>
+    <button class="hdr-tab" onclick="switchTab('ref',this)">Справочник</button>
+    <button class="hdr-tab" onclick="switchTab('history',this)">История</button>
+  </div>
+  <div class="hdr-right">
+    <div class="dot-status"></div>
+    <span class="mill-id">MILL-05 · СаАЗ · AA8011 / 15мкм</span>
+    <button class="btn" onclick="downloadJSON()">↓ JSON</button>
+    <button class="btn-accent" id="runBtn" onclick="runOptimization()">▶ Запустить расчёт</button>
+  </div>
+</div>
+<div id="prog"><div id="progFill"></div></div>
+
+<!-- ═══ APP ═══ -->
+<div id="app">
+
+  <!-- LEFT -->
+  <div class="panel" id="leftPanel">
+    <div class="ph">
+      <div class="ph-title"><em>01</em> Заказы и данные</div>
+    </div>
+    <div class="panel-body" id="leftBody">
+
+      <!-- upload -->
+      <div class="upload-drop" id="dropzone">
+        <input type="file" accept=".csv,.xlsx,.xls" onchange="handleFile(event)">
+        <div class="ud-icon">⬆</div>
+        <div class="ud-label">
+          <strong>Загрузить CSV / Excel</strong><br>
+          таблица заказов или справочник реза
+        </div>
+      </div>
+
+      <div class="sec-head">
+        Активные заказы
+        <span class="sec-count" id="orderCount">0</span>
+      </div>
+      <div class="orders-wrap" id="ordersList">
+        <div class="no-orders">Нет заказов.<br>Загрузите файл или добавьте вручную.</div>
+      </div>
+      <button class="add-btn" onclick="openModal()">+ Добавить заказ</button>
+
+      <div class="sec-head" style="margin-top:4px">Справочник межкройного реза</div>
+      <div style="padding:8px;">
+        <table class="ref-table" id="refTable">
+          <thead><tr><th>Сплав</th><th>Толщина</th><th>Рез мм</th></tr></thead>
+          <tbody id="refBody"></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="center-panel">
+    <div class="ctoolbar">
+      <div class="legend">
+        <div class="leg-item"><div class="leg-sw" style="background:#c8f03c"></div>Очередь 1</div>
+        <div class="leg-item"><div class="leg-sw" style="background:#3de0f5"></div>Спутники</div>
+        <div class="leg-item"><div class="leg-sw" style="background:rgba(240,80,74,.55);outline:1px dashed rgba(240,80,74,.35)"></div>Межкройный рез</div>
+        <div class="leg-item"><div class="leg-sw" style="background:rgba(245,184,51,.2);outline:1px solid rgba(245,184,51,.3)"></div>Кромка</div>
+        <div class="leg-item"><div class="leg-sw" style="background:rgba(255,255,255,.05);outline:1px solid rgba(255,255,255,.1)"></div>Обрезки</div>
+      </div>
+      <div class="zoom-row">
+        <button class="zbtn" onclick="zoom(-0.25)">−</button>
+        <span class="zlabel" id="zoomLbl">100%</span>
+        <button class="zbtn" onclick="zoom(+0.25)">+</button>
+        <button class="fit-btn" onclick="fitToView()">вписать</button>
+      </div>
+    </div>
+
+    <div class="cwrap" id="cwrap" onmousemove="onCanvasMove(event)" onmouseleave="onCanvasLeave()">
+      <canvas id="canvas"></canvas>
+      <div class="empty-canvas" id="emptyCanvas">
+        <div class="empty-icon">📐</div>
+        <div class="empty-text">Добавьте заказы и нажмите<br><strong style="color:var(--accent)">▶ Запустить расчёт</strong></div>
+      </div>
+    </div>
+
+    <div class="coord-bar">
+      <div class="cb-item">X: <span class="cb-val" id="cbX">—</span></div>
+      <div class="cb-item">Y: <span class="cb-val" id="cbY">—</span></div>
+      <div class="cb-item">Ширина бобины: <span class="cb-val">1500 мм</span></div>
+      <div class="cb-item" id="cbHint"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="panel">
+    <div class="ph"><div class="ph-title"><em>02</em> Метрики</div></div>
+    <div class="panel-body">
+
+      <div class="msec">
+        <div class="m-big-label">Доля обрезков</div>
+        <div class="m-big-val good" id="mWaste">—</div>
+      </div>
+
+      <div class="msec">
+        <div class="mrow"><span class="ml">Полезная площадь</span><span class="mv" id="mUsed">—</span></div>
+        <div class="mrow"><span class="ml">Площадь обрезков</span><span class="mv" id="mWasteA">—</span></div>
+        <div class="mrow"><span class="ml">Длина полосы</span><span class="mv" id="mLen">—</span></div>
+        <div class="mrow"><span class="ml">Всего заказов</span><span class="mv" id="mOrders">—</span></div>
+        <div class="mrow"><span class="ml">Размещено</span><span class="mv" id="mPlaced">—</span></div>
+      </div>
+
+      <div class="sec-head">Распределение</div>
+      <div class="msec" id="mBars"></div>
+
+      <div class="sec-head">Размещение</div>
+      <div style="padding:8px 14px;" id="mBreakdown"></div>
+
+      <div class="sec-head">JSON-инструкция для ЧПУ</div>
+      <div class="jbox">
+        <div class="jhead">
+          <span class="jtitle">CNC Output · RUN-2026</span>
+          <div class="jbtns">
+            <button class="jbtn" onclick="copyJSON()">КОПИРОВАТЬ</button>
+            <button class="jbtn" onclick="downloadJSON()">↓ ФАЙЛ</button>
+          </div>
+        </div>
+        <div class="jbody" id="jBody">// Запустите расчёт для генерации инструкции</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOOLTIP ═══ -->
+<div id="tt" class="hide"></div>
+
+<!-- ═══ MODAL ═══ -->
+<div id="overlay">
+  <div class="modal">
+    <div class="modal-title">Добавить заказ</div>
+    <div class="form-grid">
+      <div class="fgroup">
+        <label class="flabel">Номер заказа</label>
+        <input class="finput" id="fId" type="text" placeholder="ORD-0001">
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Очередность</label>
+        <select class="fselect" id="fPri">
+          <option value="1">1 — Основной</option>
+          <option value="2">2 — Спутник</option>
+          <option value="3">3 — Резерв</option>
+        </select>
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Ширина (мм)</label>
+        <input class="finput" id="fW" type="number" placeholder="500" min="1" max="1470">
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Длина (м)</label>
+        <input class="finput" id="fL" type="number" placeholder="200" min="1">
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Сплав</label>
+        <select class="fselect" id="fAlloy">
+          <option>AA8011</option><option>AA1235</option><option>AA3003</option><option>AA8079</option>
+        </select>
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Толщина (мкм)</label>
+        <select class="fselect" id="fThick">
+          <option>6</option><option>9</option><option>12</option><option>15</option><option>20</option><option>25</option><option>30</option>
+        </select>
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Количество (шт)</label>
+        <input class="finput" id="fQty" type="number" placeholder="1" min="1" value="1">
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Отмена</button>
+      <button class="btn-save" onclick="saveOrder()">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════
+const BOBBIN_W   = 1500;   // мм
+const BOBBIN_LEN = 10000;  // м
+const EDGE_TRIM  = 15;     // мм кромки с каждой стороны
+
+const REF_CUTS = [
+  {alloy:'AA8011',thick:6,cut:3},{alloy:'AA8011',thick:9,cut:4},
+  {alloy:'AA8011',thick:12,cut:5},{alloy:'AA8011',thick:15,cut:5},
+  {alloy:'AA8011',thick:20,cut:6},{alloy:'AA8011',thick:25,cut:6},
+  {alloy:'AA1235',thick:6,cut:3},{alloy:'AA1235',thick:9,cut:4},
+  {alloy:'AA1235',thick:12,cut:4},{alloy:'AA1235',thick:15,cut:5},
+  {alloy:'AA3003',thick:15,cut:6},{alloy:'AA3003',thick:20,cut:7},
+  {alloy:'AA8079',thick:6,cut:3},{alloy:'AA8079',thick:9,cut:4},
+];
+
+function getInterCut(alloy,thick){
+  const r=REF_CUTS.find(x=>x.alloy===alloy&&x.thick===+thick);
+  return r?r.cut:5;
+}
+
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+let orders  = [];  // {id,w,l,alloy,thick,qty,priority}
+let layout  = [];  // {id,w,l,alloy,thick,priority,type,x,y}
+let placed  = false;
+let scale   = 1.0;
+let totalLen= 0;
+let orderIdCounter = 1;
+let activeId = null;
+
+// ═══════════════════════════════════════════
+//  DEMO DATA
+// ═══════════════════════════════════════════
+const DEMO = [
+  {id:'ORD-7712',w:800,l:450,alloy:'AA8011',thick:15,qty:1,priority:1},
+  {id:'ORD-7713',w:530,l:420,alloy:'AA8011',thick:15,qty:2,priority:1},
+  {id:'ORD-7714',w:400,l:380,alloy:'AA8011',thick:15,qty:1,priority:1},
+  {id:'ORD-9950',w:400,l:120,alloy:'AA8011',thick:15,qty:1,priority:2},
+  {id:'ORD-9951',w:320,l:250,alloy:'AA8011',thick:15,qty:1,priority:2},
+  {id:'ORD-9952',w:220,l:180,alloy:'AA8011',thick:15,qty:1,priority:2},
+];
+orders = DEMO.map(o=>({...o}));
+orderIdCounter = 9953;
+
+// ═══════════════════════════════════════════
+//  INIT REF TABLE
+// ═══════════════════════════════════════════
+function renderRefTable(){
+  const tb=document.getElementById('refBody');
+  tb.innerHTML=REF_CUTS.map(r=>`<tr><td>${r.alloy}</td><td>${r.thick}</td><td>${r.cut}</td></tr>`).join('');
+}
+renderRefTable();
+
+// ═══════════════════════════════════════════
+//  RENDER ORDERS
+// ═══════════════════════════════════════════
+function renderOrders(){
+  const list=document.getElementById('ordersList');
+  document.getElementById('orderCount').textContent=orders.length;
+  if(!orders.length){
+    list.innerHTML='<div class="no-orders">Нет заказов.<br>Загрузите файл или добавьте вручную.</div>';
+    return;
+  }
+  list.innerHTML='';
+  orders.forEach((o,i)=>{
+    const div=document.createElement('div');
+    div.className=`ocard p${o.priority}${activeId===o.id?' sel':''}`;
+    div.style.animationDelay=(i*0.04)+'s';
+    div.innerHTML=`
+      <div class="ocard-top">
+        <span class="ocard-id">${o.id}</span>
+        <span class="badge ${o.priority===1?'b1':'b2'}">${o.priority===1?'Очередь 1':'Спутник'}</span>
+      </div>
+      <div class="ocard-dims">${o.w}мм × ${o.l}м × ${o.qty}шт</div>
+      <div class="ocard-tags">
+        <span class="tag">${o.alloy}</span>
+        <span class="tag">${o.thick}мкм</span>
+        <span class="tag">${((o.w/1000)*o.l*o.qty).toFixed(1)}м²</span>
+      </div>
+      <button class="ocard-del" onclick="deleteOrder('${o.id}',event)">✕</button>`;
+    div.onclick=()=>{ activeId=activeId===o.id?null:o.id; renderOrders(); if(placed)drawCanvas(); };
+    list.appendChild(div);
+  });
+}
+
+function deleteOrder(id,e){
+  e.stopPropagation();
+  orders=orders.filter(o=>o.id!==id);
+  if(activeId===id)activeId=null;
+  renderOrders();
+  if(placed){layout=layout.filter(l=>l.id!==id);drawCanvas();updateMetrics();}
+}
+
+renderOrders();
+
+// ═══════════════════════════════════════════
+//  FILE UPLOAD (CSV / Excel)
+// ═══════════════════════════════════════════
+function handleFile(e){
+  const file=e.target.files[0]; if(!file)return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(ext==='csv'){
+    Papa.parse(file,{header:true,skipEmptyLines:true,complete:(r)=>ingestCSV(r.data,file.name)});
+  } else if(ext==='xlsx'||ext==='xls'){
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const wb=XLSX.read(ev.target.result,{type:'binary'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const data=XLSX.utils.sheet_to_json(ws,{defval:''});
+      ingestCSV(data,file.name);
+    };
+    reader.readAsBinaryString(file);
+  } else { showToast('Поддерживаются CSV и Excel файлы'); }
+}
+
+function ingestCSV(rows,fname){
+  let added=0;
+  rows.forEach(row=>{
+    const id  = row['Номер заказа']||row['id']||row['ID']||`ORD-${orderIdCounter++}`;
+    const w   = parseFloat(row['Ширина']||row['w']||row['width']||0);
+    const l   = parseFloat(row['Длина']||row['l']||row['length']||0);
+    const alloy=String(row['Сплав']||row['alloy']||'AA8011').trim();
+    const thick=parseFloat(row['Толщина']||row['thick']||15);
+    const qty  =parseInt(row['Количество']||row['qty']||1);
+    const pri  =parseInt(row['Очередность']||row['priority']||1);
+    if(w>0&&l>0){ orders.push({id,w,l,alloy,thick,qty,priority:pri}); added++; }
+  });
+  const zone=document.getElementById('dropzone');
+  zone.querySelector('.ud-icon').textContent='✓';
+  zone.querySelector('.ud-label').innerHTML=`<strong style="color:var(--accent2,#3cf0a0)">${fname}</strong><br>${added} заказов загружено`;
+  zone.style.borderColor='rgba(61,224,245,.4)';
+  renderOrders();
+  showToast(`Загружено ${added} заказов из ${fname}`);
+}
+
+// drag-over
+const dz=document.getElementById('dropzone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop',e=>{
+  e.preventDefault();dz.classList.remove('dragover');
+  const file=e.dataTransfer.files[0];
+  if(file){ const inp=dz.querySelector('input'); inp.files=e.dataTransfer.files; handleFile({target:inp}); }
+});
+
+// ═══════════════════════════════════════════
+//  MODAL
+// ═══════════════════════════════════════════
+function openModal(){
+  document.getElementById('fId').value='ORD-'+orderIdCounter;
+  document.getElementById('fW').value='';
+  document.getElementById('fL').value='';
+  document.getElementById('fQty').value=1;
+  document.getElementById('overlay').classList.add('open');
+}
+function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
+document.getElementById('overlay').onclick=e=>{ if(e.target===e.currentTarget)closeModal(); };
+
+function saveOrder(){
+  const id=document.getElementById('fId').value.trim()||'ORD-'+orderIdCounter;
+  const w=parseFloat(document.getElementById('fW').value);
+  const l=parseFloat(document.getElementById('fL').value);
+  const alloy=document.getElementById('fAlloy').value;
+  const thick=parseInt(document.getElementById('fThick').value);
+  const qty=parseInt(document.getElementById('fQty').value)||1;
+  const priority=parseInt(document.getElementById('fPri').value);
+  if(!w||!l||w<=0||l<=0){ showToast('Введите корректные размеры',true); return; }
+  if(w>BOBBIN_W-2*EDGE_TRIM){ showToast(`Ширина не может превышать ${BOBBIN_W-2*EDGE_TRIM} мм`,true); return; }
+  orders.push({id,w,l,alloy,thick,qty,priority});
+  orderIdCounter++;
+  renderOrders(); closeModal();
+  showToast(`Заказ ${id} добавлен`);
+}
+
+// ═══════════════════════════════════════════
+//  LAYOUT ALGORITHM – Greedy Strip Packing
+//  с поддержкой приоритетов и спутников
+// ═══════════════════════════════════════════
+function computeLayout(){
+  layout=[];
+  const usable = BOBBIN_W - 2*EDGE_TRIM;
+  let yOff=0;
+  const placedSet=new Set();
+
+  // Expand qty > 1
+  const expanded=[];
+  orders.forEach(o=>{
+    for(let q=0;q<o.qty;q++){
+      expanded.push({...o, id: o.qty>1?`${o.id}-${q+1}`:o.id});
+    }
+  });
+
+  // Sort: p1 first, then by width desc (largest first → better packing)
+  const sorted=[...expanded].sort((a,b)=>{
+    if(a.priority!==b.priority) return a.priority-b.priority;
+    return b.w-a.w;
+  });
+
+  // Check if all p1 placed
+  const p1Items=sorted.filter(x=>x.priority===1);
+  const allP1Placed=()=>p1Items.every(x=>placedSet.has(x.id));
+
+  // Row-by-row greedy
+  let idx=0;
+  while(idx<sorted.length){
+    const anchor=sorted[idx];
+    if(anchor.priority>1 && !allP1Placed()){ idx++; continue; }
+    if(placedSet.has(anchor.id)){idx++;continue;}
+
+    // Start a new strip at yOff
+    const cut=getInterCut(anchor.alloy,anchor.thick);
+    let xCursor=EDGE_TRIM;
+    let stripH=anchor.l;
+    const stripItems=[];
+
+    // Place anchor
+    if(anchor.w<=usable){
+      layout.push({...anchor, x:xCursor, y:yOff, type:anchor.priority===1?'main':'satellite'});
+      placedSet.add(anchor.id);
+      stripItems.push(anchor);
+      xCursor+=anchor.w+cut;
+    }
+    idx++;
+
+    // Fill remaining strip width with smaller items (satellites preferred)
+    const remain=BOBBIN_W-EDGE_TRIM-xCursor;
+    if(remain>50){
+      // gather candidates: same alloy+thick, not yet placed, fit in width, not too long
+      const candidates=sorted.filter(c=>
+        !placedSet.has(c.id) &&
+        c.alloy===anchor.alloy && c.thick===anchor.thick &&
+        c.w<=remain &&
+        c.l<=stripH*2
+      ).sort((a,b)=>b.w-a.w);
+
+      let xC=xCursor;
+      for(const cand of candidates){
+        const rem2=BOBBIN_W-EDGE_TRIM-xC;
+        if(cand.w<=rem2){
+          layout.push({...cand, x:xC, y:yOff, type:'satellite'});
+          placedSet.add(cand.id);
+          stripH=Math.max(stripH,cand.l);
+          xC+=cand.w+cut;
+          if(xC+100>BOBBIN_W-EDGE_TRIM) break;
+        }
+      }
+    }
+
+    yOff+=stripH+cut;
+  }
+
+  // Place any remaining unplaced items (different alloy/thick or oversized)
+  for(const item of sorted){
+    if(placedSet.has(item.id)) continue;
+    const cut=getInterCut(item.alloy,item.thick);
+    layout.push({...item, x:EDGE_TRIM, y:yOff, type:item.priority===1?'main':'satellite'});
+    placedSet.add(item.id);
+    yOff+=item.l+cut;
+  }
+
+  return Math.max(yOff+20, 200);
+}
+
+// ═══════════════════════════════════════════
+//  CANVAS DRAW
+// ═══════════════════════════════════════════
+const PX_PER_MM = 0.20;  // base scale: px per mm (width axis)
+const PX_PER_M  = 0.065; // base scale: px per meter (length axis)
+const RULER_W   = 42;    // left ruler width px
+const RULER_H   = 22;    // top ruler height px
+
+function px(mm){ return mm*PX_PER_MM*scale; }
+function py(m) { return m *PX_PER_M *scale;  }
+
+function drawCanvas(){
+  const canvas=document.getElementById('canvas');
+  const empty=document.getElementById('emptyCanvas');
+
+  if(!placed||!layout.length){
+    canvas.style.display='none';
+    empty.style.display='flex';
+    return;
+  }
+  canvas.style.display='block';
+  empty.style.display='none';
+
+  const W=Math.round(px(BOBBIN_W))+RULER_W+4;
+  const H=Math.round(py(totalLen))+RULER_H+20;
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext('2d');
+
+  // ── BG ──
+  ctx.fillStyle='#111214';
+  ctx.fillRect(0,0,W,H);
+
+  // ── GRID ──
+  ctx.strokeStyle='rgba(255,255,255,0.028)';
+  ctx.lineWidth=0.5;
+  const gStepX=px(200), gStepY=py(100);
+  for(let x=RULER_W;x<W;x+=gStepX){ ctx.beginPath();ctx.moveTo(x,RULER_H);ctx.lineTo(x,H);ctx.stroke(); }
+  for(let y=RULER_H;y<H;y+=gStepY){ ctx.beginPath();ctx.moveTo(RULER_W,y);ctx.lineTo(W,y);ctx.stroke(); }
+
+  // ── TOP RULER ──
+  ctx.fillStyle='rgba(255,255,255,0.04)';
+  ctx.fillRect(RULER_W,0,W-RULER_W,RULER_H);
+  ctx.fillStyle='rgba(255,255,255,0.25)';
+  ctx.font=`${Math.max(8,8.5*scale)}px JetBrains Mono`;
+  ctx.textAlign='center';
+  for(let x=0;x<=BOBBIN_W;x+=200){
+    const px2=RULER_W+px(x);
+    ctx.fillStyle='rgba(255,255,255,.12)';
+    ctx.fillRect(px2,RULER_H-4,1,4);
+    if(x%400===0||x===0){
+      ctx.fillStyle='rgba(255,255,255,.35)';
+      ctx.fillText(x,px2,12);
+    }
+  }
+  ctx.fillStyle='rgba(255,255,255,.2)';
+  ctx.font=`${Math.max(7,7*scale)}px JetBrains Mono`;
+  ctx.textAlign='right';
+  ctx.fillText('мм',RULER_W+px(BOBBIN_W)+18,11);
+
+  // ── LEFT RULER ──
+  ctx.fillStyle='rgba(255,255,255,0.03)';
+  ctx.fillRect(0,RULER_H,RULER_W,H-RULER_H);
+  ctx.fillStyle='rgba(255,255,255,.3)';
+  ctx.font=`${Math.max(7,7.5*scale)}px JetBrains Mono`;
+  ctx.textAlign='right';
+  for(let y=0;y<=totalLen;y+=100){
+    const py2=RULER_H+py(y);
+    ctx.fillStyle='rgba(255,255,255,.08)';
+    ctx.fillRect(RULER_W-4,py2,4,1);
+    if(y%200===0){
+      ctx.fillStyle='rgba(255,255,255,.28)';
+      ctx.fillText(y+'м',RULER_W-6,py2+4);
+    }
+  }
+
+  // ── EDGE TRIM ZONES ──
+  const edgeX=px(EDGE_TRIM);
+  ctx.fillStyle='rgba(245,184,51,0.06)';
+  ctx.fillRect(RULER_W,RULER_H,edgeX,H-RULER_H);
+  ctx.fillRect(RULER_W+px(BOBBIN_W)-edgeX,RULER_H,edgeX,H-RULER_H);
+  ctx.setLineDash([4,4]);
+  ctx.strokeStyle='rgba(245,184,51,0.28)';
+  ctx.lineWidth=0.8;
+  ctx.beginPath();
+  ctx.moveTo(RULER_W+edgeX,RULER_H);ctx.lineTo(RULER_W+edgeX,H);ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(RULER_W+px(BOBBIN_W)-edgeX,RULER_H);ctx.lineTo(RULER_W+px(BOBBIN_W)-edgeX,H);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ── ORDERS ──
+  const fillP1=['rgba(200,240,60,0.20)','rgba(185,225,45,0.17)','rgba(210,248,65,0.19)'];
+  const fillP2=['rgba(61,224,245,0.16)','rgba(45,205,225,0.13)','rgba(75,235,255,0.15)'];
+
+  layout.forEach((item,idx)=>{
+    const ix=RULER_W+px(item.x);
+    const iy=RULER_H+py(item.y);
+    const iw=px(item.w);
+    const ih=py(item.l);
+    const isActive=activeId===item.id;
+    const isP1=item.priority===1;
+    const cut=getInterCut(item.alloy,item.thick);
+
+    // fill
+    ctx.fillStyle=isActive
+      ?(isP1?'rgba(200,240,60,.35)':'rgba(61,224,245,.30)')
+      :(isP1?fillP1[idx%3]:fillP2[idx%3]);
+    ctx.fillRect(ix,iy,iw,ih);
+
+    // hatch for satellites
+    if(item.type==='satellite'){
+      ctx.save();
+      ctx.beginPath();ctx.rect(ix,iy,iw,ih);ctx.clip();
+      ctx.strokeStyle=isP1?'rgba(200,240,60,.06)':'rgba(61,224,245,.06)';
+      ctx.lineWidth=0.5;
+      const s=Math.max(10,14*scale);
+      for(let d=-(ih+iw);d<ih+iw;d+=s){
+        ctx.beginPath();ctx.moveTo(ix+d,iy);ctx.lineTo(ix+d+ih,iy+ih);ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // border
+    ctx.strokeStyle=isActive
+      ?(isP1?'#c8f03c':'#3de0f5')
+      :(isP1?'rgba(200,240,60,.55)':'rgba(61,224,245,.45)');
+    ctx.lineWidth=isActive?1.5:0.75;
+    ctx.strokeRect(ix+0.5,iy+0.5,iw-1,ih-1);
+
+    // inter-cut gap marker (right edge)
+    const cutPx=px(cut);
+    if(cutPx>1){
+      ctx.fillStyle='rgba(240,80,74,0.07)';
+      ctx.fillRect(ix+iw, iy, cutPx, ih);
+      ctx.strokeStyle='rgba(240,80,74,0.35)';
+      ctx.lineWidth=0.6;
+      ctx.setLineDash([3,3]);
+      ctx.beginPath();
+      ctx.moveTo(ix+iw+cutPx/2,iy);ctx.lineTo(ix+iw+cutPx/2,iy+ih);ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // label
+    const fs=Math.max(8,Math.min(10.5,9.5*scale));
+    if(iw>38&&ih>16){
+      ctx.font=`700 ${fs}px JetBrains Mono`;
+      ctx.fillStyle=isP1?'rgba(200,240,60,.92)':'rgba(61,224,245,.9)';
+      ctx.textAlign='left';
+      const label=iw>80?item.id:item.id.replace('ORD-','');
+      ctx.fillText(label,ix+5,iy+fs+3);
+      if(ih>28&&iw>60){
+        ctx.font=`${Math.max(7,fs-1.5)}px JetBrains Mono`;
+        ctx.fillStyle='rgba(255,255,255,.28)';
+        ctx.fillText(`${item.w}×${item.l}м`,ix+5,iy+fs*2+4);
+      }
+    }
+  });
+
+  // ── BOBBIN BORDER ──
+  ctx.strokeStyle='rgba(255,255,255,0.1)';
+  ctx.lineWidth=1;
+  ctx.strokeRect(RULER_W,RULER_H,px(BOBBIN_W),py(totalLen));
+}
+
+// ═══════════════════════════════════════════
+//  MOUSE TRACKING
+// ═══════════════════════════════════════════
+function onCanvasMove(e){
+  const canvas=document.getElementById('canvas');
+  if(!placed||canvas.style.display==='none') return;
+  const rect=canvas.getBoundingClientRect();
+  const rx=e.clientX-rect.left; const ry=e.clientY-rect.top;
+  const mmX=Math.round((rx-RULER_W)/PX_PER_MM/scale);
+  const mY =((ry-RULER_H)/PX_PER_M/scale).toFixed(1);
+  document.getElementById('cbX').textContent=mmX>=0&&mmX<=BOBBIN_W?mmX+'мм':'—';
+  document.getElementById('cbY').textContent=mY>=0?mY+'м':'—';
+
+  const hit=layout.find(item=>{
+    const ix=RULER_W+px(item.x), iy=RULER_H+py(item.y);
+    const iw=px(item.w),ih=py(item.l);
+    return rx>=ix&&rx<=ix+iw&&ry>=iy&&ry<=iy+ih;
+  });
+
+  const tt=document.getElementById('tt');
+  if(hit){
+    tt.classList.remove('hide');
+    tt.style.left=(e.clientX+15)+'px';
+    tt.style.top=(e.clientY-8)+'px';
+    const cut=getInterCut(hit.alloy,hit.thick);
+    tt.innerHTML=`
+      <div class="tt-id">${hit.id}</div>
+      <div class="tt-row"><span class="tt-k">Тип</span><span class="tt-v">${hit.type==='main'?'Основной':'Спутник'}</span></div>
+      <div class="tt-row"><span class="tt-k">Очередь</span><span class="tt-v">${hit.priority}</span></div>
+      <div class="tt-row"><span class="tt-k">Ширина</span><span class="tt-v">${hit.w} мм</span></div>
+      <div class="tt-row"><span class="tt-k">Длина</span><span class="tt-v">${hit.l} м</span></div>
+      <div class="tt-row"><span class="tt-k">Площадь</span><span class="tt-v">${((hit.w/1000)*hit.l).toFixed(2)} м²</span></div>
+      <div class="tt-row"><span class="tt-k">Сплав</span><span class="tt-v">${hit.alloy} / ${hit.thick}мкм</span></div>
+      <div class="tt-row"><span class="tt-k">Межкрой</span><span class="tt-v">${cut} мм</span></div>
+      <div class="tt-row"><span class="tt-k">X</span><span class="tt-v">${hit.x} мм</span></div>
+      <div class="tt-row"><span class="tt-k">Y</span><span class="tt-v">${hit.y} м</span></div>`;
+    document.getElementById('cbHint').innerHTML=`<span style="color:var(--accent)">${hit.id}</span>`;
+  } else {
+    tt.classList.add('hide');
+    document.getElementById('cbHint').innerHTML='';
+  }
+}
+function onCanvasLeave(){
+  document.getElementById('tt').classList.add('hide');
+  document.getElementById('cbX').textContent='—';
+  document.getElementById('cbY').textContent='—';
+}
+
+// ═══════════════════════════════════════════
+//  ZOOM + FIT
+// ═══════════════════════════════════════════
+function zoom(delta){
+  scale=Math.max(0.3,Math.min(4.0,scale+delta));
+  document.getElementById('zoomLbl').textContent=Math.round(scale*100)+'%';
+  if(placed)drawCanvas();
+}
+function fitToView(){
+  const wrap=document.getElementById('cwrap');
+  if(!placed||!totalLen) return;
+  const ww=wrap.clientWidth-40, wh=wrap.clientHeight-40;
+  const sw=ww/(BOBBIN_W*PX_PER_MM);
+  const sh=wh/(totalLen*PX_PER_M);
+  scale=Math.min(sw,sh,3.0);
+  document.getElementById('zoomLbl').textContent=Math.round(scale*100)+'%';
+  drawCanvas();
+}
+function resetZoom(){scale=1;document.getElementById('zoomLbl').textContent='100%';if(placed)drawCanvas();}
+
+// ═══════════════════════════════════════════
+//  METRICS
+// ═══════════════════════════════════════════
+function updateMetrics(){
+  const totalArea=(BOBBIN_W/1000)*totalLen;
+  let usedArea=0;
+  layout.forEach(item=>{ usedArea+=(item.w/1000)*item.l; });
+  const cutArea=layout.reduce((s,item)=>{
+    const cut=getInterCut(item.alloy,item.thick);
+    return s+(cut/1000)*item.l;
+  },0);
+  const edgeArea=(EDGE_TRIM*2/1000)*totalLen;
+  const wasteArea=totalArea-usedArea;
+  const wastePct=(wasteArea/totalArea*100).toFixed(1);
+
+  document.getElementById('mWaste').textContent=wastePct+'%';
+  const cls=+wastePct<10?'good':+wastePct<20?'warn':'bad';
+  document.getElementById('mWaste').className='m-big-val '+cls;
+  document.getElementById('mUsed').textContent=usedArea.toFixed(1)+' м²';
+  document.getElementById('mWasteA').textContent=wasteArea.toFixed(1)+' м²';
+  document.getElementById('mLen').textContent=totalLen+' м';
+  document.getElementById('mOrders').textContent=orders.length;
+  document.getElementById('mPlaced').textContent=layout.length;
+
+  // bars
+  const p1a=layout.filter(i=>i.priority===1).reduce((s,i)=>s+(i.w/1000)*i.l,0);
+  const p2a=layout.filter(i=>i.priority>1).reduce((s,i)=>s+(i.w/1000)*i.l,0);
+  const bars=[
+    {label:'Очередь 1',val:p1a,pct:p1a/totalArea*100,color:'#c8f03c'},
+    {label:'Спутники', val:p2a,pct:p2a/totalArea*100,color:'#3de0f5'},
+    {label:'Кромки',   val:edgeArea,pct:edgeArea/totalArea*100,color:'rgba(245,184,51,.6)'},
+    {label:'Обрезки',  val:wasteArea-edgeArea,pct:Math.max(0,(wasteArea-edgeArea)/totalArea*100),color:'rgba(255,255,255,.2)'},
+  ];
+  document.getElementById('mBars').innerHTML=bars.map(b=>`
+    <div class="mbar-row">
+      <div class="mbar-top"><span>${b.label}</span><span>${b.pct.toFixed(1)}%</span></div>
+      <div class="mbar-track"><div class="mbar-fill" style="width:${b.pct}%;background:${b.color}"></div></div>
+    </div>`).join('');
+
+  // breakdown list
+  document.getElementById('mBreakdown').innerHTML=layout.map(item=>`
+    <div class="ob-item">
+      <div class="ob-dot" style="background:${item.priority===1?'#c8f03c':'#3de0f5'}"></div>
+      <span class="ob-id">${item.id}</span>
+      <span class="ob-dim">${item.w}×${item.l}м</span>
+    </div>`).join('');
+
+  // JSON
+  const cut0=layout.length?getInterCut(layout[0].alloy,layout[0].thick):5;
+  const jsonObj={
+    instruction_metadata:{
+      batch_id:`RUN-${new Date().toISOString().slice(0,10)}-001`,
+      timestamp:new Date().toISOString(),
+      factory:'СаАЗ', machine_id:'MILL-05'
+    },
+    source_material:{
+      alloy:layout[0]?.alloy||'AA8011',
+      thickness_um:layout[0]?.thick||15,
+      bobbin_width_mm:BOBBIN_W,
+      bobbin_length_m:BOBBIN_LEN
+    },
+    layout_configuration:{inter_cut_mm:cut0, edge_trim_mm:EDGE_TRIM},
+    cutting_map:layout.map(item=>({
+      order_id:item.id, type:item.type, priority:item.priority,
+      coordinates:{x_start_mm:item.x, y_start_m:item.y, width_mm:item.w, length_m:item.l}
+    })),
+    efficiency_metrics:{
+      total_used_area_m2:+usedArea.toFixed(2),
+      waste_area_m2:+wasteArea.toFixed(2),
+      waste_percentage:+wastePct
+    }
+  };
+  window._jsonStr=JSON.stringify(jsonObj,null,2);
+  const hl=window._jsonStr
+    .replace(/"([^"]+)":/g,'<span class="jk">"$1"</span>:')
+    .replace(/: "([^"]+)"/g,': <span class="js">"$1"</span>')
+    .replace(/: (-?\d+\.?\d*)/g,': <span class="jn">$1</span>');
+  document.getElementById('jBody').innerHTML=hl;
+}
+
+// ═══════════════════════════════════════════
+//  RUN
+// ═══════════════════════════════════════════
+function runOptimization(){
+  if(!orders.length){ showToast('Добавьте хотя бы один заказ',true); return; }
+  const btn=document.getElementById('runBtn');
+  btn.disabled=true; btn.textContent='⏳ Расчёт...'; btn.classList.add('running');
+  const fill=document.getElementById('progFill');
+  fill.style.width='0%';
+
+  let p=0;
+  const iv=setInterval(()=>{
+    p+=Math.random()*18+5;
+    if(p>=95){clearInterval(iv);p=95;}
+    fill.style.width=p+'%';
+  },60);
+
+  setTimeout(()=>{
+    totalLen=computeLayout();
+    if(totalLen<50) totalLen=200;
+    placed=true;
+
+    fill.style.width='100%';
+    clearInterval(iv);
+    setTimeout(()=>{fill.style.width='0%';},700);
+
+    btn.disabled=false; btn.textContent='▶ Пересчитать'; btn.classList.remove('running');
+    drawCanvas();
+    updateMetrics();
+    fitToView();
+    showToast('Раскрой рассчитан · '+layout.length+' заказов размещено');
+  }, 700+Math.random()*400);
+}
+
+// ═══════════════════════════════════════════
+//  COPY / DOWNLOAD JSON
+// ═══════════════════════════════════════════
+function copyJSON(){
+  if(!window._jsonStr){ showToast('Сначала запустите расчёт',true); return; }
+  navigator.clipboard.writeText(window._jsonStr).then(()=>{
+    showToast('JSON скопирован в буфер обмена');
+  });
+}
+function downloadJSON(){
+  if(!window._jsonStr){ showToast('Сначала запустите расчёт',true); return; }
+  const blob=new Blob([window._jsonStr],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url;
+  a.download=`cutflow_run_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('JSON файл скачан');
+}
+
+// ═══════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════
+let toastTimer=null;
+function showToast(msg,err=false){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.borderColor=err?'rgba(240,80,74,.4)':'var(--borderB)';
+  t.style.color=err?'var(--red)':'var(--text)';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+// ═══════════════════════════════════════════
+//  TAB SWITCHER (stub)
+// ═══════════════════════════════════════════
+function switchTab(tab,el){
+  document.querySelectorAll('.hdr-tab').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  // For prototype: only layout tab is functional
+  if(tab!=='layout') showToast('Раздел «'+el.textContent+'» — в разработке');
+}
+
+// ═══════════════════════════════════════════
+//  KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  if(e.key==='+'||e.key==='=') zoom(+0.25);
+  if(e.key==='-') zoom(-0.25);
+  if(e.key==='0') fitToView();
+  if(e.key==='Enter'&&!document.getElementById('overlay').classList.contains('open')) runOptimization();
+  if(e.key==='Escape') closeModal();
+});
+
+// ═══════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════
+renderOrders();
+// show empty state canvas
+document.getElementById('canvas').style.display='none';
+document.getElementById('emptyCanvas').style.display='flex';
+</script>
+</body>
+</html>

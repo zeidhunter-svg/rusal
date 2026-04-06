@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Временные файлы визуализатора
+*.png
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db

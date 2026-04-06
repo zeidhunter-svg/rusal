@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CutFlow — РУСАЛ · Раскрой Фольги v0.2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;600;700;800&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<!-- PapaParse for CSV -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<!-- SheetJS for Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div id="header">
+  <div class="logo">
+    <div class="logo-mark"></div>
+    <span class="logo-name">CutFlow</span>
+    <span class="logo-pipe">РУСАЛ · v0.2</span>
+  </div>
+  <div class="hdr-center">
+    <button class="hdr-tab active" onclick="switchTab('layout',this)">Раскрой</button>
+    <button class="hdr-tab" onclick="switchTab('ref',this)">Справочник</button>
+    <button class="hdr-tab" onclick="switchTab('history',this)">История</button>
+  </div>
+  <div class="hdr-right">
+    <div class="dot-status"></div>
+    <span class="mill-id">MILL-05 · СаАЗ · AA8011 / 15мкм</span>
+    <button class="btn" onclick="downloadPNG()">↓ PNG</button>
+    <button class="btn" onclick="downloadJSON()">↓ JSON</button>
+    <button class="btn-accent" id="runBtn" onclick="runOptimization()">▶ Запустить расчёт</button>
+  </div>
+</div>
+<div id="prog"><div id="progFill"></div></div>
+
+<!-- ═══ APP ═══ -->
+<div id="app">
+
+  <!-- LEFT: заказы и справочник -->
+  <div class="panel" id="leftPanel">
+    <div class="ph">
+      <div class="ph-title"><em>01</em> Заказы и данные</div>
+    </div>
+    <div class="panel-body" id="leftBody">
+
+      <!-- Загрузка файла -->
+      <div class="upload-drop" id="dropzone">
+        <input type="file" accept=".csv,.xlsx,.xls" onchange="handleFile(event)">
+        <div class="ud-icon">⬆</div>
+        <div class="ud-label">
+          <strong>Загрузить CSV / Excel</strong><br>
+          таблица заказов или справочник реза
+        </div>
+      </div>
+
+      <div class="sec-head">
+        Активные заказы
+        <span class="sec-count" id="orderCount">0</span>
+      </div>
+      <div class="orders-wrap" id="ordersList">
+        <div class="no-orders">Нет заказов.<br>Загрузите файл или добавьте вручную.</div>
+      </div>
+      <button class="add-btn" onclick="openModal()">+ Добавить заказ</button>
+
+      <div class="sec-head" style="margin-top:4px">Справочник межкройного реза</div>
+      <div style="padding:8px;">
+        <table class="ref-table" id="refTable">
+          <thead><tr><th>Сплав</th><th>Толщина</th><th>Рез мм</th></tr></thead>
+          <tbody id="refBody"></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CENTER: canvas-визуализация -->
+  <div class="center-panel">
+    <div class="ctoolbar">
+      <div class="legend">
+        <div class="leg-item"><div class="leg-sw" style="background:#7DCEA0;border:1px solid #555"></div>Очередь 1</div>
+        <div class="leg-item"><div class="leg-sw" style="background:#F9E79F;border:1px solid #555"></div>Очередь 2</div>
+        <div class="leg-item"><div class="leg-sw" style="background:#F5B7B1;border:1px solid #555"></div>Очередь 3+</div>
+        <div class="leg-item"><div class="leg-sw" style="background:rgba(255,0,0,0.75);border:1px solid darkred"></div>Межкройный рез</div>
+        <div class="leg-item"><div class="leg-sw" style="background:#E5E7E9;border:1px solid #9E9E9E"></div>Кромка</div>
+        <div class="leg-item"><div class="leg-sw" style="background:rgba(133,193,233,0.30);border:1px solid #1F618D"></div>Пустоты</div>
+      </div>
+      <div class="zoom-row">
+        <button class="zbtn" onclick="zoom(-0.25)">−</button>
+        <span class="zlabel" id="zoomLbl">100%</span>
+        <button class="zbtn" onclick="zoom(+0.25)">+</button>
+        <button class="fit-btn" onclick="fitToView()">вписать</button>
+      </div>
+    </div>
+
+    <div class="cwrap" id="cwrap" onmousemove="onCanvasMove(event)" onmouseleave="onCanvasLeave()" style="cursor:grab">
+      <canvas id="canvas"></canvas>
+      <div class="empty-canvas" id="emptyCanvas">
+        <div class="empty-icon">📐</div>
+        <div class="empty-text">Добавьте заказы и нажмите<br><strong style="color:var(--accent)">▶ Запустить расчёт</strong></div>
+      </div>
+    </div>
+
+    <div class="coord-bar">
+      <div class="cb-item">X: <span class="cb-val" id="cbX">—</span></div>
+      <div class="cb-item">Y: <span class="cb-val" id="cbY">—</span></div>
+      <div class="cb-item">Ширина бобины: <span class="cb-val">1500 мм</span></div>
+      <div class="cb-item" id="cbHint"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: метрики и экспорт -->
+  <div class="panel">
+    <div class="ph"><div class="ph-title"><em>02</em> Метрики</div></div>
+    <div class="panel-body">
+
+      <div class="msec">
+        <div class="m-big-label">Доля обрезков</div>
+        <div class="m-big-val good" id="mWaste">—</div>
+      </div>
+
+      <div class="msec">
+        <div class="mrow"><span class="ml">Полезная площадь</span><span class="mv" id="mUsed">—</span></div>
+        <div class="mrow"><span class="ml">Площадь обрезков</span><span class="mv" id="mWasteA">—</span></div>
+        <div class="mrow"><span class="ml">Длина полосы</span><span class="mv" id="mLen">—</span></div>
+        <div class="mrow"><span class="ml">Всего заказов</span><span class="mv" id="mOrders">—</span></div>
+        <div class="mrow"><span class="ml">Размещено</span><span class="mv" id="mPlaced">—</span></div>
+      </div>
+
+      <div class="sec-head">Распределение</div>
+      <div class="msec" id="mBars"></div>
+
+      <div class="sec-head">Размещение</div>
+      <div style="padding:8px 14px;" id="mBreakdown"></div>
+
+      <div class="sec-head">JSON-инструкция для ЧПУ</div>
+      <div class="jbox">
+        <div class="jhead">
+          <span class="jtitle">CNC Output · RUN-2026</span>
+          <div class="jbtns">
+            <button class="jbtn" onclick="copyJSON()">КОПИРОВАТЬ</button>
+            <button class="jbtn" onclick="downloadJSON()">↓ ФАЙЛ</button>
+          </div>
+        </div>
+        <div class="jbody" id="jBody">// Запустите расчёт для генерации инструкции</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOOLTIP ═══ -->
+<div id="tt" class="hide"></div>
+
+<!-- ═══ MODAL: добавление заказа ═══ -->
+<div id="overlay">
+  <div class="modal">
+    <div class="modal-title">Добавить заказ</div>
+    <div class="form-grid">
+      <div class="fgroup">
+        <label class="flabel">Номер заказа</label>
+        <input class="finput" id="fId" type="text" placeholder="ORD-0001">
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Очередность (1 = первый)</label>
+        <input class="finput" id="fPri" type="number" min="1" max="99" value="1" placeholder="1">
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Ширина (мм)</label>
+        <input class="finput" id="fW" type="number" placeholder="500" min="1" max="1470">
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Длина (м)</label>
+        <input class="finput" id="fL" type="number" placeholder="200" min="1">
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Сплав</label>
+        <select class="fselect" id="fAlloy">
+          <option>AA8011</option><option>AA1235</option><option>AA3003</option><option>AA8079</option>
+        </select>
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Толщина (мкм)</label>
+        <select class="fselect" id="fThick">
+          <option>6</option><option>9</option><option>12</option><option>15</option>
+          <option>20</option><option>25</option><option>30</option>
+        </select>
+      </div>
+      <div class="fgroup">
+        <label class="flabel">Количество (шт)</label>
+        <input class="finput" id="fQty" type="number" placeholder="1" min="1" value="1">
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Отмена</button>
+      <button class="btn-save" onclick="saveOrder()">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div id="toast"></div>
+
+<!-- ═══ JS: порядок загрузки важен (глобальные переменные) ═══ -->
+<script src="js/constants.js"></script>
+<script src="js/state.js"></script>
+<script src="js/orders.js"></script>
+<script src="js/upload.js"></script>
+<script src="js/modal.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/tooltip.js"></script>
+<script src="js/zoom.js"></script>
+<script src="js/metrics.js"></script>
+<script src="js/run.js"></script>
+<script src="js/export.js"></script>
+<script src="js/ui.js"></script>
+
+</body>
+</html>
